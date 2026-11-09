@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-// @ts-expect-error Next.js processes global CSS imports at build time.
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Edftar - 100% Free & Private Online PDF Tools",
   description:
     "Merge, split, rotate, organize, and convert PDF files directly in your web browser. Completely private, fast, and secure with no server file uploads.",
-  keywords: ["PDF", "Merge PDF", "Split PDF", "Rotate PDF", "JPG to PDF", "PDF to JPG", "Edftar", "iLovePDF alternative"],
+  keywords: ["PDF", "Merge PDF", "Split PDF", "Rotate PDF", "JPG to PDF", "PDF to JPG", "Word to PDF", "PDF to Word", "Edftar", "free PDF tools"],
 };
 
 export default function RootLayout({
