@@ -91,7 +91,7 @@ export default function CompressPdfPage() {
       }
 
       const compressedBytes = await newPdf.save();
-      const blob = new Blob([compressedBytes], { type: "application/pdf" });
+      const blob = new Blob([compressedBytes as unknown as BlobPart], { type: "application/pdf" });
 
       setResult({
         blob,
