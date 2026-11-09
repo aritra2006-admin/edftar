@@ -22,7 +22,6 @@ interface Annotation {
   id: string;
   pageIndex: number;
   type: "text" | "draw" | "highlight" | "whiteout" | "signature" | "rect";
-  // Position in page percentage or absolute coords
   x: number;
   y: number;
   width?: number;
@@ -46,17 +45,23 @@ export default function PdfEditorPage() {
   const [statusMsg, setStatusMsg] = useState("");
 
   // Styling state
-  const [fontColor, setFontColor] = useState("#000000");
+  const [fontColor, setFontColor] = useState("#0f172a");
   const [fontSize, setFontSize] = useState(16);
   const [penColor, setPenColor] = useState("#ef4444");
   const [penWidth, setPenWidth] = useState(3);
   const [highlightColor, setHighlightColor] = useState("rgba(250, 204, 21, 0.45)");
 
-  // Annotations store per document
+  // Annotations store
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Drawing state
+  // Dragging and Resizing State
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [resizingId, setResizingId] = useState<string | null>(null);
+  const [resizeStart, setResizeStart] = useState<{ x: number; y: number; w: number; h: number }>({ x: 0, y: 0, w: 0, h: 0 });
+
+  // Freehand Drawing state
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentPath, setCurrentPath] = useState<{ x: number; y: number }[]>([]);
 
@@ -65,7 +70,7 @@ export default function PdfEditorPage() {
   const sigCanvasRef = useRef<HTMLCanvasElement>(null);
   const [isSigDrawing, setIsSigDrawing] = useState(false);
 
-  // Canvas refs
+  // Canvas & Container refs
   const pdfCanvasRef = useRef<HTMLCanvasElement>(null);
   const drawCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -78,7 +83,7 @@ export default function PdfEditorPage() {
     }
     setFile(f);
     setStatus("loading");
-    setStatusMsg("Rendering PDF pages...");
+    setStatusMsg("Rendering PDF...");
     setAnnotations([]);
     setSelectedId(null);
     setCurrentPage(1);
@@ -113,7 +118,6 @@ export default function PdfEditorPage() {
       canvas.width = viewport.width;
       canvas.height = viewport.height;
 
-      // Also resize the overlay drawing canvas
       if (drawCanvasRef.current) {
         drawCanvasRef.current.width = viewport.width;
         drawCanvasRef.current.height = viewport.height;
@@ -129,61 +133,141 @@ export default function PdfEditorPage() {
     renderPage();
   }, [renderPage]);
 
-  // Click on PDF Canvas
-  const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!drawCanvasRef.current) return;
-    const rect = drawCanvasRef.current.getBoundingClientRect();
+  // Click on PDF Canvas to place new annotations
+  const handleStageClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!containerRef.current || draggingId || resizingId) return;
+
+    // Only create when text/whiteout/rect tool is active
+    if (activeTool === "select" || activeTool === "draw" || activeTool === "highlight") {
+      return;
+    }
+
+    const rect = containerRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
     if (activeTool === "text") {
-      const initialText = prompt("Enter text to place on PDF:", "Add your text here");
-      if (!initialText) return;
-
       const newAnno: Annotation = {
         id: Math.random().toString(36).slice(2),
         pageIndex: currentPage,
         type: "text",
-        x,
-        y,
-        text: initialText,
+        x: Math.max(10, x - 10),
+        y: Math.max(10, y - 10),
+        text: "Click and type text here",
         fontSize,
         color: fontColor,
       };
       setAnnotations((prev) => [...prev, newAnno]);
+      setSelectedId(newAnno.id);
       setActiveTool("select");
     } else if (activeTool === "whiteout") {
-      const w = 140;
-      const h = 30;
+      const w = 150;
+      const h = 32;
       const newAnno: Annotation = {
         id: Math.random().toString(36).slice(2),
         pageIndex: currentPage,
         type: "whiteout",
-        x: x - w / 2,
-        y: y - h / 2,
+        x: Math.max(10, x - w / 2),
+        y: Math.max(10, y - h / 2),
         width: w,
         height: h,
         color: "#ffffff",
       };
       setAnnotations((prev) => [...prev, newAnno]);
+      setSelectedId(newAnno.id);
       setActiveTool("select");
     } else if (activeTool === "rect") {
-      const w = 120;
-      const h = 60;
+      const w = 140;
+      const h = 70;
       const newAnno: Annotation = {
         id: Math.random().toString(36).slice(2),
         pageIndex: currentPage,
         type: "rect",
-        x: x - w / 2,
-        y: y - h / 2,
+        x: Math.max(10, x - w / 2),
+        y: Math.max(10, y - h / 2),
         width: w,
         height: h,
         color: penColor,
         lineWidth: penWidth,
       };
       setAnnotations((prev) => [...prev, newAnno]);
+      setSelectedId(newAnno.id);
       setActiveTool("select");
     }
+  };
+
+  // Dragging Handlers for Annotations
+  const handleAnnotationMouseDown = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedId(id);
+    const anno = annotations.find((a) => a.id === id);
+    if (!anno || !containerRef.current) return;
+
+    setDraggingId(id);
+    const rect = containerRef.current.getBoundingClientRect();
+    setDragOffset({
+      x: (e.clientX - rect.left) - anno.x,
+      y: (e.clientY - rect.top) - anno.y,
+    });
+  };
+
+  const handleResizeMouseDown = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const anno = annotations.find((a) => a.id === id);
+    if (!anno) return;
+
+    setResizingId(id);
+    setResizeStart({
+      x: e.clientX,
+      y: e.clientY,
+      w: anno.width || 120,
+      h: anno.height || 60,
+    });
+  };
+
+  // Global Mouse Move and Mouse Up across the viewport
+  const handleContainerMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+
+    if (draggingId) {
+      const currentMouseX = e.clientX - rect.left;
+      const currentMouseY = e.clientY - rect.top;
+
+      setAnnotations((prev) =>
+        prev.map((a) => {
+          if (a.id === draggingId) {
+            return {
+              ...a,
+              x: Math.max(0, Math.min(rect.width - 40, currentMouseX - dragOffset.x)),
+              y: Math.max(0, Math.min(rect.height - 20, currentMouseY - dragOffset.y)),
+            };
+          }
+          return a;
+        })
+      );
+    } else if (resizingId) {
+      const deltaX = e.clientX - resizeStart.x;
+      const deltaY = e.clientY - resizeStart.y;
+
+      setAnnotations((prev) =>
+        prev.map((a) => {
+          if (a.id === resizingId) {
+            return {
+              ...a,
+              width: Math.max(40, resizeStart.w + deltaX),
+              height: Math.max(20, resizeStart.h + deltaY),
+            };
+          }
+          return a;
+        })
+      );
+    }
+  };
+
+  const handleContainerMouseUp = () => {
+    setDraggingId(null);
+    setResizingId(null);
   };
 
   // Freehand Drawing Handlers
@@ -201,7 +285,6 @@ export default function PdfEditorPage() {
     const pt = { x: e.clientX - rect.left, y: e.clientY - rect.top };
     setCurrentPath((prev) => [...prev, pt]);
 
-    // Live stroke preview
     const ctx = drawCanvasRef.current?.getContext("2d");
     if (!ctx || currentPath.length < 1) return;
 
@@ -237,14 +320,19 @@ export default function PdfEditorPage() {
     setCurrentPath([]);
   };
 
-  // Delete an annotation
+  const updateText = (id: string, newText: string) => {
+    setAnnotations((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, text: newText } : a))
+    );
+  };
+
   const deleteAnnotation = (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
     setAnnotations((prev) => prev.filter((a) => a.id !== id));
     if (selectedId === id) setSelectedId(null);
   };
 
-  // Signature Canvas Drawing
+  // Signature Canvas Handlers
   const startSigDraw = (e: React.MouseEvent<HTMLCanvasElement>) => {
     setIsSigDrawing(true);
     const canvas = sigCanvasRef.current;
@@ -290,13 +378,14 @@ export default function PdfEditorPage() {
       id: Math.random().toString(36).slice(2),
       pageIndex: currentPage,
       type: "signature",
-      x: 100,
-      y: 150,
-      width: 160,
-      height: 70,
+      x: 120,
+      y: 180,
+      width: 180,
+      height: 75,
       dataUrl,
     };
     setAnnotations((prev) => [...prev, newAnno]);
+    setSelectedId(newAnno.id);
     setShowSigModal(false);
     clearSig();
     setActiveTool("select");
@@ -306,14 +395,13 @@ export default function PdfEditorPage() {
   const saveAndDownloadPdf = async () => {
     if (!file || !pdfDoc) return;
     setStatus("saving");
-    setStatusMsg("Baking edits into PDF...");
+    setStatusMsg("Baking edits into final PDF...");
 
     try {
       const { PDFDocument, rgb } = await import("pdf-lib");
       const arrayBuffer = await file.arrayBuffer();
       const pdfLibDoc = await PDFDocument.load(arrayBuffer);
 
-      // Iterate through each page of the document
       for (let i = 0; i < pdfLibDoc.getPageCount(); i++) {
         const pageIdx = i + 1;
         const pageAnnos = annotations.filter((a) => a.pageIndex === pageIdx);
@@ -322,7 +410,6 @@ export default function PdfEditorPage() {
         const targetPage = pdfLibDoc.getPage(i);
         const { width: pageWidth, height: pageHeight } = targetPage.getSize();
 
-        // Calculate scale ratio between on-screen viewport and original PDF points
         const pageObj = await pdfDoc.getPage(pageIdx);
         const viewport = pageObj.getViewport({ scale });
         const scaleX = pageWidth / viewport.width;
@@ -330,19 +417,19 @@ export default function PdfEditorPage() {
 
         for (const anno of pageAnnos) {
           if (anno.type === "text" && anno.text) {
-            // pdf-lib origin (0,0) is BOTTOM-LEFT
             const pdfX = anno.x * scaleX;
-            const pdfY = pageHeight - (anno.y * scaleY) - ((anno.fontSize || 16) * scaleY);
+            const pdfFontSize = (anno.fontSize || 16) * scaleX;
+            const pdfY = pageHeight - (anno.y * scaleY) - pdfFontSize;
 
             targetPage.drawText(anno.text, {
-              x: pdfX,
-              y: pdfY,
-              size: (anno.fontSize || 16) * scaleX,
+              x: Math.max(0, pdfX),
+              y: Math.max(0, pdfY),
+              size: pdfFontSize,
               color: rgb(0.1, 0.1, 0.1),
             });
           } else if (anno.type === "whiteout") {
             const pdfX = anno.x * scaleX;
-            const pdfWidth = (anno.width || 100) * scaleX;
+            const pdfWidth = (anno.width || 120) * scaleX;
             const pdfHeight = (anno.height || 30) * scaleY;
             const pdfY = pageHeight - (anno.y * scaleY) - pdfHeight;
 
@@ -355,8 +442,8 @@ export default function PdfEditorPage() {
             });
           } else if (anno.type === "rect") {
             const pdfX = anno.x * scaleX;
-            const pdfWidth = (anno.width || 100) * scaleX;
-            const pdfHeight = (anno.height || 50) * scaleY;
+            const pdfWidth = (anno.width || 120) * scaleX;
+            const pdfHeight = (anno.height || 60) * scaleY;
             const pdfY = pageHeight - (anno.y * scaleY) - pdfHeight;
 
             targetPage.drawRectangle({
@@ -370,8 +457,8 @@ export default function PdfEditorPage() {
           } else if (anno.type === "signature" && anno.dataUrl) {
             const pngImage = await pdfLibDoc.embedPng(anno.dataUrl);
             const pdfX = anno.x * scaleX;
-            const pdfWidth = (anno.width || 160) * scaleX;
-            const pdfHeight = (anno.height || 70) * scaleY;
+            const pdfWidth = (anno.width || 180) * scaleX;
+            const pdfHeight = (anno.height || 75) * scaleY;
             const pdfY = pageHeight - (anno.y * scaleY) - pdfHeight;
 
             targetPage.drawImage(pngImage, {
@@ -406,10 +493,9 @@ export default function PdfEditorPage() {
   return (
     <div className="flex flex-col min-h-screen bg-[#2d3139] text-slate-100 select-none">
       
-      {/* 1. Adobe Style Top Navigation Bar (Acrobat Dark Theme #1e2229) */}
+      {/* 1. Adobe Style Top Navigation Bar */}
       <header className="bg-[#1e2229] border-b border-[#3b404d] px-4 py-2 flex items-center justify-between shadow-sm z-30">
         <div className="flex items-center gap-3">
-          {/* Adobe Red Badge */}
           <div className="w-8 h-8 rounded-lg bg-[#eb1000] text-white flex items-center justify-center font-black text-sm shadow-sm">
             PDF
           </div>
@@ -420,7 +506,7 @@ export default function PdfEditorPage() {
                 Acrobat Pro Mode
               </span>
             </h1>
-            <span className="text-[11px] text-slate-400">100% Client-Side • Private &amp; Secure</span>
+            <span className="text-[11px] text-slate-400">Drag to move • Click to type directly • 100% Private</span>
           </div>
         </div>
 
@@ -462,9 +548,9 @@ export default function PdfEditorPage() {
               className={`px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition-colors ${
                 activeTool === "select" ? "bg-[#eb1000] text-white" : "text-slate-300 hover:bg-slate-800"
               }`}
-              title="Select / Hand tool"
+              title="Select & Move Tool (Drag boxes around)"
             >
-              👆 Select
+              👆 Select / Move
             </button>
 
             <button
@@ -472,7 +558,7 @@ export default function PdfEditorPage() {
               className={`px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition-colors ${
                 activeTool === "text" ? "bg-[#eb1000] text-white" : "text-slate-300 hover:bg-slate-800"
               }`}
-              title="Click on page to type text"
+              title="Click on page to type text anywhere"
             >
               🔤 Add Text
             </button>
@@ -555,7 +641,7 @@ export default function PdfEditorPage() {
 
             {(activeTool === "draw" || activeTool === "rect") && (
               <div className="flex items-center gap-2 bg-[#1e2229] px-2.5 py-1 rounded-xl border border-[#3b404d]">
-                <span className="text-slate-400">Pen Color:</span>
+                <span className="text-slate-400">Color:</span>
                 <input
                   type="color"
                   value={penColor}
@@ -575,17 +661,17 @@ export default function PdfEditorPage() {
               </div>
             )}
 
-            {/* Undo All On Page */}
+            {/* Clear page annotations */}
             {currentPageAnnotations.length > 0 && (
               <button
                 onClick={() => {
-                  if (confirm("Clear all annotations on this page?")) {
+                  if (confirm("Clear all edits on this page?")) {
                     setAnnotations((prev) => prev.filter((a) => a.pageIndex !== currentPage));
                   }
                 }}
                 className="px-2.5 py-1 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-800/40 text-xs font-semibold flex items-center gap-1"
               >
-                <Trash2 className="w-3.5 h-3.5" /> Clear Page ({currentPageAnnotations.length})
+                <Trash2 className="w-3.5 h-3.5" /> Clear ({currentPageAnnotations.length})
               </button>
             )}
 
@@ -624,8 +710,12 @@ export default function PdfEditorPage() {
         </div>
       )}
 
-      {/* 3. Main Editor Stage */}
-      <div className="flex-1 flex justify-center items-start overflow-auto p-4 sm:p-8 relative">
+      {/* 3. Main Stage Container */}
+      <div 
+        onMouseMove={handleContainerMouseMove}
+        onMouseUp={handleContainerMouseUp}
+        className="flex-1 flex justify-center items-start overflow-auto p-4 sm:p-8 relative"
+      >
         {!file ? (
           /* Empty State Dropzone */
           <div className="max-w-xl w-full my-auto text-center space-y-6">
@@ -670,49 +760,72 @@ export default function PdfEditorPage() {
             </div>
           </div>
         ) : (
-          /* PDF Canvas & Annotation Overlay Container */
+          /* PDF Page Sheet with Annotations Overlay */
           <div 
             ref={containerRef}
-            onClick={handleCanvasClick}
-            className="relative shadow-2xl rounded-sm border border-slate-700 bg-white cursor-crosshair overflow-hidden select-none"
+            onClick={handleStageClick}
+            className={`relative shadow-2xl rounded-sm border border-slate-700 bg-white select-none ${
+              activeTool === "text" || activeTool === "whiteout" || activeTool === "rect" ? "cursor-crosshair" : "cursor-default"
+            }`}
           >
             {/* Base PDF Canvas */}
             <canvas ref={pdfCanvasRef} className="block pointer-events-none" />
 
-            {/* Drawing Layer Canvas */}
+            {/* Freehand Drawing Canvas */}
             <canvas
               ref={drawCanvasRef}
               onMouseDown={startDrawing}
               onMouseMove={drawMove}
               onMouseUp={stopDrawing}
               onMouseLeave={stopDrawing}
-              className="absolute inset-0 z-10"
+              className={`absolute inset-0 z-10 ${
+                activeTool === "draw" || activeTool === "highlight" ? "pointer-events-auto cursor-crosshair" : "pointer-events-none"
+              }`}
             />
 
-            {/* Rendered Annotations for this page */}
+            {/* Interactive & Draggable Annotations */}
             {currentPageAnnotations.map((anno) => {
               const isSelected = selectedId === anno.id;
 
+              /* TEXT ANNOTATION - Direct Inline Typing */
               if (anno.type === "text") {
                 return (
                   <div
                     key={anno.id}
-                    onClick={(e) => { e.stopPropagation(); setSelectedId(anno.id); }}
+                    onMouseDown={(e) => handleAnnotationMouseDown(anno.id, e)}
                     style={{
                       left: anno.x,
                       top: anno.y,
-                      color: anno.color,
-                      fontSize: `${anno.fontSize}px`,
-                      fontFamily: "Arial, sans-serif",
                     }}
-                    className={`absolute z-20 cursor-move group select-none px-1 py-0.5 rounded ${
-                      isSelected ? "ring-2 ring-blue-500 bg-blue-50/20" : "hover:ring-1 hover:ring-slate-400"
+                    className={`absolute z-20 group flex items-start gap-1 p-1 rounded transition-shadow ${
+                      isSelected ? "ring-2 ring-blue-500 bg-blue-500/10 shadow-lg" : "hover:ring-1 hover:ring-slate-400"
                     }`}
                   >
-                    <span>{anno.text}</span>
+                    {/* Drag Handle */}
+                    <div className="cursor-move p-0.5 text-slate-400 hover:text-slate-800 opacity-60 group-hover:opacity-100" title="Drag to move">
+                      ⠿
+                    </div>
+
+                    {/* Inline Input/Textarea */}
+                    <input
+                      type="text"
+                      value={anno.text || ""}
+                      onChange={(e) => updateText(anno.id, e.target.value)}
+                      onFocus={() => setSelectedId(anno.id)}
+                      style={{
+                        color: anno.color || fontColor,
+                        fontSize: `${anno.fontSize || fontSize}px`,
+                        fontFamily: "Arial, sans-serif",
+                      }}
+                      className="bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none px-1 py-0.5 font-medium transition-all"
+                      placeholder="Type text..."
+                    />
+
+                    {/* Delete button */}
                     <button
                       onClick={(e) => deleteAnnotation(anno.id, e)}
-                      className="absolute -top-3 -right-3 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="w-4 h-4 rounded-full bg-red-600 text-white flex items-center justify-center text-[9px] opacity-0 group-hover:opacity-100 transition-opacity ml-1 shrink-0"
+                      title="Delete text"
                     >
                       ✕
                     </button>
@@ -720,80 +833,112 @@ export default function PdfEditorPage() {
                 );
               }
 
+              /* WHITEOUT ANNOTATION - Draggable and Resizable */
               if (anno.type === "whiteout") {
                 return (
                   <div
                     key={anno.id}
-                    onClick={(e) => { e.stopPropagation(); setSelectedId(anno.id); }}
+                    onMouseDown={(e) => handleAnnotationMouseDown(anno.id, e)}
                     style={{
                       left: anno.x,
                       top: anno.y,
-                      width: anno.width,
-                      height: anno.height,
+                      width: anno.width || 140,
+                      height: anno.height || 32,
                     }}
-                    className={`absolute z-20 bg-white border border-dashed border-slate-300 group ${
+                    className={`absolute z-20 bg-white border border-dashed border-slate-400 group cursor-move shadow-xs ${
                       isSelected ? "ring-2 ring-blue-500" : ""
                     }`}
                   >
+                    {/* Delete Button */}
                     <button
                       onClick={(e) => deleteAnnotation(anno.id, e)}
-                      className="absolute -top-3 -right-3 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute -top-2.5 -right-2.5 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity z-30"
+                      title="Delete whiteout"
                     >
                       ✕
                     </button>
+
+                    {/* Corner Resize Handle */}
+                    <div
+                      onMouseDown={(e) => handleResizeMouseDown(anno.id, e)}
+                      className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-blue-500 cursor-nwse-resize opacity-0 group-hover:opacity-100 z-30"
+                      title="Drag to resize"
+                    />
                   </div>
                 );
               }
 
+              /* RECTANGLE / BOX ANNOTATION */
               if (anno.type === "rect") {
                 return (
                   <div
                     key={anno.id}
-                    onClick={(e) => { e.stopPropagation(); setSelectedId(anno.id); }}
+                    onMouseDown={(e) => handleAnnotationMouseDown(anno.id, e)}
                     style={{
                       left: anno.x,
                       top: anno.y,
-                      width: anno.width,
-                      height: anno.height,
-                      borderColor: anno.color,
-                      borderWidth: `${anno.lineWidth}px`,
+                      width: anno.width || 140,
+                      height: anno.height || 70,
+                      borderColor: anno.color || penColor,
+                      borderWidth: `${anno.lineWidth || penWidth}px`,
                     }}
-                    className={`absolute z-20 border group ${
+                    className={`absolute z-20 border group cursor-move ${
                       isSelected ? "ring-2 ring-blue-500" : ""
                     }`}
                   >
                     <button
                       onClick={(e) => deleteAnnotation(anno.id, e)}
-                      className="absolute -top-3 -right-3 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute -top-2.5 -right-2.5 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity z-30"
+                      title="Delete box"
                     >
                       ✕
                     </button>
+                    <div
+                      onMouseDown={(e) => handleResizeMouseDown(anno.id, e)}
+                      className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-blue-500 cursor-nwse-resize opacity-0 group-hover:opacity-100 z-30"
+                      title="Drag to resize"
+                    />
                   </div>
                 );
               }
 
+              /* SIGNATURE ANNOTATION - Draggable and Resizable */
               if (anno.type === "signature" && anno.dataUrl) {
                 return (
                   <div
                     key={anno.id}
-                    onClick={(e) => { e.stopPropagation(); setSelectedId(anno.id); }}
+                    onMouseDown={(e) => handleAnnotationMouseDown(anno.id, e)}
                     style={{
                       left: anno.x,
                       top: anno.y,
-                      width: anno.width,
-                      height: anno.height,
+                      width: anno.width || 180,
+                      height: anno.height || 75,
                     }}
-                    className={`absolute z-20 group cursor-move select-none ${
+                    className={`absolute z-20 group cursor-move select-none p-1 border border-transparent hover:border-blue-300 rounded ${
                       isSelected ? "ring-2 ring-blue-500 bg-blue-50/20" : ""
                     }`}
                   >
-                    <img src={anno.dataUrl} alt="Signature" className="w-full h-full object-contain pointer-events-none" />
+                    <img 
+                      src={anno.dataUrl} 
+                      alt="Signature" 
+                      className="w-full h-full object-contain pointer-events-none" 
+                    />
+
+                    {/* Delete button */}
                     <button
                       onClick={(e) => deleteAnnotation(anno.id, e)}
-                      className="absolute -top-3 -right-3 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute -top-2.5 -right-2.5 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity z-30"
+                      title="Delete signature"
                     >
                       ✕
                     </button>
+
+                    {/* Resize Handle */}
+                    <div
+                      onMouseDown={(e) => handleResizeMouseDown(anno.id, e)}
+                      className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-blue-500 cursor-nwse-resize opacity-0 group-hover:opacity-100 z-30"
+                      title="Drag to resize signature"
+                    />
                   </div>
                 );
               }
@@ -804,7 +949,7 @@ export default function PdfEditorPage() {
         )}
       </div>
 
-      {/* 4. Signature Capture Modal */}
+      {/* 4. Signature Draw Modal */}
       {showSigModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50 animate-fadeIn">
           <div className="bg-[#1e2229] border border-[#3b404d] rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
