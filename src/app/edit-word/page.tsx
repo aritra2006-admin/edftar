@@ -2,31 +2,52 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { 
-  FileText, 
   FileWord, 
+  FileText, 
   Download, 
   Loader2, 
   Check, 
   Plus, 
   UploadCloud, 
-  Archive 
+  Printer, 
+  Undo, 
+  Redo, 
+  Search, 
+  ZoomIn, 
+  ZoomOut,
+  Maximize2
 } from "@/components/Icons";
 
-export default function DocumentEditorPage() {
+type ActiveTab = "home" | "insert" | "layout" | "view";
+
+export default function MSWordEditorPage() {
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [docTitle, setDocTitle] = useState("Untitled Document");
+  
+  // Document state
+  const [docTitle, setDocTitle] = useState("Document1");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("home");
   const [status, setStatus] = useState<"idle" | "loading" | "exporting">("idle");
   const [statusMsg, setStatusMsg] = useState("");
-  const [showExportMenu, setShowExportMenu] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [showFileMenu, setShowFileMenu] = useState(false);
+  
+  // Document stats
   const [wordCount, setWordCount] = useState(0);
   const [charCount, setCharCount] = useState(0);
+  const [zoom, setZoom] = useState(100);
+  
+  // Formatting state
+  const [fontFamily, setFontFamily] = useState("Calibri, sans-serif");
+  const [fontSize, setFontSize] = useState("3");
+  const [pageOrientation, setPageOrientation] = useState<"portrait" | "landscape">("portrait");
+  const [pageMargin, setPageMargin] = useState<"normal" | "narrow" | "wide">("normal");
+  const [showRuler, setShowRuler] = useState(true);
 
-  // Load saved document from localStorage on mount
+  // Load saved document from localStorage
   useEffect(() => {
-    const savedContent = localStorage.getItem("edftar-doc-content");
-    const savedTitle = localStorage.getItem("edftar-doc-title");
+    const savedContent = localStorage.getItem("edftar-msword-content");
+    const savedTitle = localStorage.getItem("edftar-msword-title");
     if (savedContent && editorRef.current) {
       editorRef.current.innerHTML = savedContent;
     }
@@ -50,39 +71,40 @@ export default function DocumentEditorPage() {
 
   const saveToLocal = useCallback(() => {
     if (!editorRef.current) return;
-    localStorage.setItem("edftar-doc-content", editorRef.current.innerHTML);
-    localStorage.setItem("edftar-doc-title", docTitle);
+    localStorage.setItem("edftar-msword-content", editorRef.current.innerHTML);
+    localStorage.setItem("edftar-msword-title", docTitle);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }, [docTitle]);
 
-  // Auto-save every 30 seconds
+  // Auto-save every 20 seconds
   useEffect(() => {
     const interval = setInterval(() => {
       if (editorRef.current) {
-        localStorage.setItem("edftar-doc-content", editorRef.current.innerHTML);
-        localStorage.setItem("edftar-doc-title", docTitle);
+        localStorage.setItem("edftar-msword-content", editorRef.current.innerHTML);
+        localStorage.setItem("edftar-msword-title", docTitle);
       }
-    }, 30000);
+    }, 20000);
     return () => clearInterval(interval);
   }, [docTitle]);
 
   const newDocument = () => {
-    if (window.confirm("Start a new document? Any unsaved edits will be cleared.")) {
+    if (window.confirm("Create a new document? Unsaved changes will be cleared.")) {
       if (editorRef.current) {
         editorRef.current.innerHTML = `
-          <h1>Untitled Document</h1>
-          <p>Start typing your content here...</p>
+          <h1 style="font-size: 22pt; font-weight: bold; margin-bottom: 12pt; color: #1f2937;">Heading 1</h1>
+          <p style="margin-bottom: 8pt; line-height: 1.6;">Type your document text here...</p>
         `;
       }
-      setDocTitle("Untitled Document");
-      localStorage.removeItem("edftar-doc-content");
-      localStorage.removeItem("edftar-doc-title");
+      setDocTitle("Document1");
+      localStorage.removeItem("edftar-msword-content");
+      localStorage.removeItem("edftar-msword-title");
       updateCounts();
     }
+    setShowFileMenu(false);
   };
 
-  // Import existing .docx file
+  // Import existing Word doc
   const handleOpenDocx = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -100,95 +122,34 @@ export default function DocumentEditorPage() {
       }
       const title = file.name.replace(/\.[^.]+$/, "");
       setDocTitle(title);
-      localStorage.setItem("edftar-doc-content", result.value);
-      localStorage.setItem("edftar-doc-title", title);
+      localStorage.setItem("edftar-msword-content", result.value);
+      localStorage.setItem("edftar-msword-title", title);
       updateCounts();
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (err) {
       console.error(err);
-      alert("Failed to read the Word file. Please verify it is a valid .docx file.");
+      alert("Could not open this Word file. Please verify it is a valid .docx file.");
     } finally {
       setStatus("idle");
       setStatusMsg("");
+      setShowFileMenu(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  // Export as PDF via styled browser print preview
-  const exportAsPdf = () => {
-    if (!editorRef.current) return;
-    setStatus("exporting");
-
-    const content = editorRef.current.innerHTML;
-    const styledHtml = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>${docTitle}</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      font-size: 12pt;
-      line-height: 1.7;
-      color: #1a1a1a;
-      background: #fff;
-      padding: 2.54cm;
-      max-width: 21cm;
-      margin: 0 auto;
-    }
-    h1 { font-size: 22pt; font-weight: 700; margin: 18pt 0 10pt; color: #111; }
-    h2 { font-size: 17pt; font-weight: 600; margin: 14pt 0 8pt; color: #222; }
-    h3 { font-size: 13pt; font-weight: 600; margin: 12pt 0 6pt; color: #333; }
-    p { margin: 6pt 0; }
-    ul, ol { padding-left: 24pt; margin: 6pt 0; }
-    li { margin: 3pt 0; }
-    blockquote {
-      border-left: 3pt solid #cbd5e1;
-      padding-left: 12pt;
-      color: #475569;
-      margin: 8pt 0;
-      font-style: italic;
-    }
-    table { border-collapse: collapse; width: 100%; margin: 8pt 0; }
-    td, th { border: 1px solid #cbd5e1; padding: 6pt 8pt; }
-    th { background: #f1f5f9; font-weight: 600; }
-    img { max-width: 100%; height: auto; margin: 8pt 0; border-radius: 4px; }
-    a { color: #2563eb; text-decoration: underline; }
-    @media print {
-      body { padding: 0; }
-      @page { margin: 2.54cm; size: A4; }
-    }
-  </style>
-</head>
-<body>
-${content}
-</body>
-</html>`;
-
-    const blob = new Blob([styledHtml], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const win = window.open(url, "_blank");
-    if (win) {
-      win.onload = () => win.print();
-    }
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-    setStatus("idle");
-  };
-
-  // Export as Word .docx
+  // Export as Word (.docx)
   const exportAsDocx = async () => {
     if (!editorRef.current) return;
     setStatus("exporting");
-    setStatusMsg("Generating .docx file...");
+    setStatusMsg("Building Word .docx...");
 
     try {
       const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import("docx");
 
       const tempDiv = document.createElement("div");
       tempDiv.innerHTML = editorRef.current.innerHTML;
-      const blocks = tempDiv.querySelectorAll("p, h1, h2, h3, div, li, blockquote");
+      const blocks = tempDiv.querySelectorAll("p, h1, h2, h3, h4, div, li, blockquote");
 
       const docParagraphs: any[] = [];
 
@@ -207,12 +168,12 @@ ${content}
           if (tag === "h1") {
             docParagraphs.push(new Paragraph({
               heading: HeadingLevel.HEADING_1,
-              children: [new TextRun({ text, bold: true, size: 44 })],
+              children: [new TextRun({ text, bold: true, size: 40 })],
             }));
           } else if (tag === "h2") {
             docParagraphs.push(new Paragraph({
               heading: HeadingLevel.HEADING_2,
-              children: [new TextRun({ text, bold: true, size: 34 })],
+              children: [new TextRun({ text, bold: true, size: 32 })],
             }));
           } else if (tag === "h3") {
             docParagraphs.push(new Paragraph({
@@ -235,40 +196,96 @@ ${content}
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${docTitle.replace(/[^a-zA-Z0-9_\- ]/g, "").trim() || "document"}.docx`;
+      a.download = `${docTitle.replace(/[^a-zA-Z0-9_\- ]/g, "").trim() || "Document"}.docx`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch (err) {
       console.error(err);
-      alert("Failed to export Word document.");
+      alert("Error generating .docx file.");
     } finally {
       setStatus("idle");
       setStatusMsg("");
+      setShowFileMenu(false);
     }
   };
 
-  const exportAsHtml = () => {
+  // Export as PDF via Print
+  const exportAsPdf = () => {
     if (!editorRef.current) return;
-    const blob = new Blob([editorRef.current.innerHTML], { type: "text/html" });
+    setStatus("exporting");
+
+    const content = editorRef.current.innerHTML;
+    const styledHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${docTitle}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: ${fontFamily};
+      font-size: 11pt;
+      line-height: 1.6;
+      color: #111;
+      background: #fff;
+      padding: ${pageMargin === "narrow" ? "1.27cm" : pageMargin === "wide" ? "3.8cm" : "2.54cm"};
+      max-width: 21cm;
+      margin: 0 auto;
+    }
+    h1 { font-size: 20pt; font-weight: bold; margin: 16pt 0 8pt; color: #1e3a8a; }
+    h2 { font-size: 16pt; font-weight: bold; margin: 12pt 0 6pt; color: #1e40af; }
+    h3 { font-size: 13pt; font-weight: bold; margin: 10pt 0 4pt; color: #374151; }
+    p { margin-bottom: 6pt; }
+    ul, ol { padding-left: 20pt; margin-bottom: 6pt; }
+    li { margin-bottom: 2pt; }
+    table { border-collapse: collapse; width: 100%; margin: 8pt 0; }
+    td, th { border: 1px solid #94a3b8; padding: 5pt 7pt; }
+    th { background: #f1f5f9; font-weight: bold; }
+    img { max-width: 100%; height: auto; }
+    @media print {
+      body { padding: 0; }
+      @page { 
+        size: A4 ${pageOrientation};
+        margin: ${pageMargin === "narrow" ? "1.27cm" : pageMargin === "wide" ? "3.8cm" : "2.54cm"}; 
+      }
+    }
+  </style>
+</head>
+<body>
+${content}
+</body>
+</html>`;
+
+    const blob = new Blob([styledHtml], { type: "text/html" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${docTitle.replace(/[^a-zA-Z0-9_\- ]/g, "").trim() || "document"}.html`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    const win = window.open(url, "_blank");
+    if (win) {
+      win.onload = () => win.print();
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    setStatus("idle");
+    setShowFileMenu(false);
   };
 
-  const exportAsTxt = () => {
-    if (!editorRef.current) return;
-    const blob = new Blob([editorRef.current.innerText || ""], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${docTitle.replace(/[^a-zA-Z0-9_\- ]/g, "").trim() || "document"}.txt`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  // Insert Table Modal / Prompt
+  const insertTable = () => {
+    const rows = parseInt(prompt("Number of rows:", "3") || "3", 10);
+    const cols = parseInt(prompt("Number of columns:", "3") || "3", 10);
+    if (!rows || !cols) return;
+
+    let html = '<table style="border-collapse: collapse; width: 100%; margin: 12px 0;"><tbody>';
+    for (let r = 0; r < rows; r++) {
+      html += "<tr>";
+      for (let c = 0; c < cols; c++) {
+        html += `<td style="border: 1px solid #cbd5e1; padding: 8px 12px; min-width: 60px;">Cell</td>`;
+      }
+      html += "</tr>";
+    }
+    html += "</tbody></table><p><br></p>";
+    execCmd("insertHTML", html);
   };
 
+  // Insert Image
   const insertImage = () => {
     const input = document.createElement("input");
     input.type = "file";
@@ -286,37 +303,75 @@ ${content}
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 space-y-4">
-      {/* Header bar */}
-      <div className="flex items-center justify-between gap-4 flex-wrap bg-white p-4 rounded-3xl border border-slate-200/90 shadow-xs">
-        <div className="flex items-center gap-3 flex-1 min-w-[240px]">
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
-            <FileWord className="w-6 h-6" />
+    <div className="flex flex-col min-h-screen bg-[#f3f2f1] text-[#242424] select-none">
+      {/* 1. Office Top Header (Word Blue #185abd) */}
+      <header className="bg-[#185abd] text-white px-3 py-1.5 flex items-center justify-between text-xs sm:text-sm shadow-sm select-none">
+        <div className="flex items-center gap-3">
+          <div className="w-7 h-7 rounded bg-white text-[#185abd] flex items-center justify-center font-black shadow-xs">
+            <span className="text-base font-bold">W</span>
           </div>
-          <div className="flex-1">
+          <div className="flex items-center gap-1.5">
             <input
               type="text"
               value={docTitle}
               onChange={(e) => setDocTitle(e.target.value)}
-              className="text-lg font-bold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none px-1 py-0.5 w-full transition-all"
-              placeholder="Document title..."
+              className="bg-transparent hover:bg-white/10 focus:bg-white focus:text-[#185abd] text-white px-2 py-0.5 rounded font-semibold text-sm outline-none transition-all"
+              title="Click to rename document"
             />
-            <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
-              <span>{wordCount} words</span>
-              <span>•</span>
-              <span>{charCount} characters</span>
-              {saved && (
-                <span className="text-emerald-600 font-semibold flex items-center gap-1 ml-2">
-                  <Check className="w-3 h-3" /> Saved locally
-                </span>
-              )}
-            </div>
+            <span className="text-white/70 text-xs hidden sm:inline">- Word Online</span>
           </div>
+          <span className="text-xs text-white/80 hidden md:inline-flex items-center gap-1">
+            {saved ? "✓ Saved" : "Auto-saving..."}
+          </span>
         </div>
 
-        {/* Action buttons */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Hidden input for opening Word documents */}
+        <div className="flex items-center gap-2">
+          {statusMsg && (
+            <span className="text-xs bg-white/20 px-2 py-0.5 rounded flex items-center gap-1">
+              <Loader2 className="w-3 h-3 animate-spin" /> {statusMsg}
+            </span>
+          )}
+          <button
+            onClick={() => exportAsDocx()}
+            className="bg-white text-[#185abd] hover:bg-white/90 font-bold px-3 py-1 rounded text-xs transition-colors flex items-center gap-1.5 shadow-xs"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Download .docx
+          </button>
+        </div>
+      </header>
+
+      {/* 2. Ribbon Tabs Bar */}
+      <div className="bg-[#f3f2f1] border-b border-[#e1dfdd] px-2 flex items-center gap-1 text-xs select-none">
+        <button
+          onClick={() => setShowFileMenu(!showFileMenu)}
+          className={`px-3 py-1.5 font-bold uppercase tracking-wider transition-colors ${
+            showFileMenu ? "bg-[#185abd] text-white" : "bg-[#185abd] text-white hover:bg-[#114b9c]"
+          }`}
+        >
+          File
+        </button>
+        {(["home", "insert", "layout", "view"] as ActiveTab[]).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => { setActiveTab(tab); setShowFileMenu(false); }}
+            className={`px-3 py-1.5 capitalize font-medium border-b-2 transition-all ${
+              activeTab === tab && !showFileMenu
+                ? "border-[#185abd] text-[#185abd] font-bold bg-white"
+                : "border-transparent text-[#323130] hover:bg-[#edebe9]"
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      {/* File Dropdown / Modal */}
+      {showFileMenu && (
+        <div 
+          className="bg-white border-b border-[#e1dfdd] p-4 shadow-lg flex flex-wrap items-center gap-3 text-xs select-none z-50"
+          onMouseLeave={() => setShowFileMenu(false)}
+        >
           <input
             ref={fileInputRef}
             type="file"
@@ -325,264 +380,371 @@ ${content}
             onChange={handleOpenDocx}
           />
           <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={status !== "idle"}
-            className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs sm:text-sm font-semibold transition-colors flex items-center gap-1.5"
-            title="Import an existing .docx Word file"
-          >
-            <UploadCloud className="w-4 h-4 text-blue-600" />
-            Open .docx
-          </button>
-
-          <button
             onClick={newDocument}
-            className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs sm:text-sm font-semibold transition-colors flex items-center gap-1.5"
+            className="px-3 py-2 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold flex items-center gap-1.5"
           >
-            <Plus className="w-4 h-4" />
-            New
+            <Plus className="w-4 h-4 text-blue-600" /> New Document
           </button>
-
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="px-3 py-2 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold flex items-center gap-1.5"
+          >
+            <UploadCloud className="w-4 h-4 text-blue-600" /> Open .docx File
+          </button>
           <button
             onClick={saveToLocal}
-            className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs sm:text-sm font-semibold transition-colors"
+            className="px-3 py-2 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold flex items-center gap-1.5"
           >
-            💾 Save
+            💾 Save to Browser
           </button>
-
-          <div className="relative">
-            <button
-              onClick={() => setShowExportMenu(!showExportMenu)}
-              disabled={status !== "idle"}
-              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold shadow-sm shadow-blue-500/20 transition-all flex items-center gap-1.5"
-            >
-              {status === "exporting" ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Exporting...
-                </>
-              ) : (
-                <>
-                  <Download className="w-4 h-4" />
-                  Export / Download
-                </>
-              )}
-            </button>
-
-            {showExportMenu && (
-              <div 
-                className="absolute right-0 top-full mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50 divide-y divide-slate-100"
-                onMouseLeave={() => setShowExportMenu(false)}
-              >
-                <div className="py-1">
-                  <button 
-                    onClick={() => { exportAsDocx(); setShowExportMenu(false); }} 
-                    className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 text-slate-700 hover:text-blue-600 flex items-center gap-2.5 font-medium transition-colors"
-                  >
-                    <FileWord className="w-4 h-4 text-blue-600" />
-                    Word Document (.docx)
-                  </button>
-                  <button 
-                    onClick={() => { exportAsPdf(); setShowExportMenu(false); }} 
-                    className="w-full px-4 py-2 text-left text-sm hover:bg-rose-50 text-slate-700 hover:text-rose-600 flex items-center gap-2.5 font-medium transition-colors"
-                  >
-                    <FileText className="w-4 h-4 text-rose-600" />
-                    PDF Document (.pdf)
-                  </button>
-                </div>
-                <div className="py-1">
-                  <button 
-                    onClick={() => { exportAsHtml(); setShowExportMenu(false); }} 
-                    className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 text-slate-700 flex items-center gap-2.5 font-medium transition-colors"
-                  >
-                    🌐 Webpage (.html)
-                  </button>
-                  <button 
-                    onClick={() => { exportAsTxt(); setShowExportMenu(false); }} 
-                    className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 text-slate-700 flex items-center gap-2.5 font-medium transition-colors"
-                  >
-                    📃 Plain Text (.txt)
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {statusMsg && (
-        <div className="flex items-center gap-2 p-3 rounded-2xl bg-blue-50 border border-blue-200 text-blue-700 text-sm">
-          <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-          <span>{statusMsg}</span>
+          <button
+            onClick={exportAsDocx}
+            className="px-3 py-2 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold flex items-center gap-1.5"
+          >
+            <FileWord className="w-4 h-4 text-blue-600" /> Export as Word (.docx)
+          </button>
+          <button
+            onClick={exportAsPdf}
+            className="px-3 py-2 rounded bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold flex items-center gap-1.5"
+          >
+            <FileText className="w-4 h-4 text-rose-600" /> Export / Print as PDF
+          </button>
         </div>
       )}
 
-      {/* Editor Toolbar */}
-      <div className="sticky top-20 z-30 bg-white/95 backdrop-blur border border-slate-200 rounded-2xl shadow-sm p-2 flex flex-wrap items-center gap-1 text-slate-700">
-        {/* Paragraph style */}
-        <select
-          onChange={(e) => execCmd("formatBlock", e.target.value)}
-          className="px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs sm:text-sm font-semibold text-slate-700 outline-none cursor-pointer hover:bg-slate-100 transition-colors"
-          defaultValue="p"
-        >
-          <option value="p">Paragraph</option>
-          <option value="h1">Heading 1</option>
-          <option value="h2">Heading 2</option>
-          <option value="h3">Heading 3</option>
-          <option value="blockquote">Quote</option>
-        </select>
+      {/* 3. Ribbon Controls Toolbar (MS Word Style) */}
+      <div className="bg-white border-b border-[#e1dfdd] px-3 py-2 flex flex-wrap items-center gap-2 text-xs shadow-xs min-h-[48px] select-none">
+        {/* HOME TAB */}
+        {activeTab === "home" && (
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Undo / Redo */}
+            <div className="flex items-center gap-0.5 border-r border-[#e1dfdd] pr-2">
+              <button onClick={() => execCmd("undo")} className="p-1.5 hover:bg-[#edebe9] rounded text-slate-700" title="Undo (Ctrl+Z)">
+                ↩
+              </button>
+              <button onClick={() => execCmd("redo")} className="p-1.5 hover:bg-[#edebe9] rounded text-slate-700" title="Redo (Ctrl+Y)">
+                ↪
+              </button>
+            </div>
 
-        <div className="w-px h-5 bg-slate-200 mx-1" />
+            {/* Font Family & Size */}
+            <div className="flex items-center gap-1 border-r border-[#e1dfdd] pr-2">
+              <select
+                value={fontFamily}
+                onChange={(e) => {
+                  setFontFamily(e.target.value);
+                  execCmd("fontName", e.target.value);
+                }}
+                className="bg-transparent border border-[#d1d5db] rounded px-2 py-1 text-xs outline-none cursor-pointer"
+              >
+                <option value="Calibri, sans-serif">Calibri</option>
+                <option value="Arial, sans-serif">Arial</option>
+                <option value="'Times New Roman', serif">Times New Roman</option>
+                <option value="Georgia, serif">Georgia</option>
+                <option value="'Courier New', monospace">Courier New</option>
+                <option value="Verdana, sans-serif">Verdana</option>
+                <option value="'Segoe UI', sans-serif">Segoe UI</option>
+              </select>
 
-        {/* Font size */}
-        <select
-          onChange={(e) => execCmd("fontSize", e.target.value)}
-          className="px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs sm:text-sm font-semibold text-slate-700 outline-none cursor-pointer hover:bg-slate-100 transition-colors"
-          defaultValue="3"
-        >
-          <option value="1">Small</option>
-          <option value="3">Normal</option>
-          <option value="5">Large</option>
-          <option value="7">Huge</option>
-        </select>
+              <select
+                value={fontSize}
+                onChange={(e) => {
+                  setFontSize(e.target.value);
+                  execCmd("fontSize", e.target.value);
+                }}
+                className="bg-transparent border border-[#d1d5db] rounded px-1.5 py-1 text-xs outline-none cursor-pointer"
+              >
+                <option value="1">8pt</option>
+                <option value="2">10pt</option>
+                <option value="3">12pt</option>
+                <option value="4">14pt</option>
+                <option value="5">18pt</option>
+                <option value="6">24pt</option>
+                <option value="7">36pt</option>
+              </select>
+            </div>
 
-        <div className="w-px h-5 bg-slate-200 mx-1" />
+            {/* B / I / U / S */}
+            <div className="flex items-center gap-0.5 border-r border-[#e1dfdd] pr-2">
+              <button onClick={() => execCmd("bold")} className="w-7 h-7 hover:bg-[#edebe9] rounded font-bold text-sm" title="Bold">
+                B
+              </button>
+              <button onClick={() => execCmd("italic")} className="w-7 h-7 hover:bg-[#edebe9] rounded italic font-serif text-sm" title="Italic">
+                I
+              </button>
+              <button onClick={() => execCmd("underline")} className="w-7 h-7 hover:bg-[#edebe9] rounded underline text-sm" title="Underline">
+                U
+              </button>
+              <button onClick={() => execCmd("strikeThrough")} className="w-7 h-7 hover:bg-[#edebe9] rounded line-through text-sm" title="Strikethrough">
+                ab
+              </button>
+              <button onClick={() => execCmd("subscript")} className="w-7 h-7 hover:bg-[#edebe9] rounded text-xs" title="Subscript">
+                X₂
+              </button>
+              <button onClick={() => execCmd("superscript")} className="w-7 h-7 hover:bg-[#edebe9] rounded text-xs" title="Superscript">
+                X²
+              </button>
+            </div>
 
-        {/* Formatting buttons */}
-        <button
-          onClick={() => execCmd("bold")}
-          className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center font-bold text-sm"
-          title="Bold (Ctrl+B)"
-        >
-          B
-        </button>
-        <button
-          onClick={() => execCmd("italic")}
-          className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center italic font-serif text-sm"
-          title="Italic (Ctrl+I)"
-        >
-          I
-        </button>
-        <button
-          onClick={() => execCmd("underline")}
-          className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center underline text-sm"
-          title="Underline (Ctrl+U)"
-        >
-          U
-        </button>
-        <button
-          onClick={() => execCmd("strikeThrough")}
-          className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center line-through text-sm"
-          title="Strikethrough"
-        >
-          S
-        </button>
+            {/* Colors */}
+            <div className="flex items-center gap-1 border-r border-[#e1dfdd] pr-2">
+              <label className="flex items-center gap-0.5 p-1 hover:bg-[#edebe9] rounded cursor-pointer" title="Font Color">
+                <span className="font-bold underline decoration-red-500">A</span>
+                <input
+                  type="color"
+                  defaultValue="#1e293b"
+                  onChange={(e) => execCmd("foreColor", e.target.value)}
+                  className="w-3.5 h-3.5 border-0 bg-transparent cursor-pointer p-0"
+                />
+              </label>
+              <label className="flex items-center gap-0.5 p-1 hover:bg-[#edebe9] rounded cursor-pointer" title="Highlight Color">
+                <span>🖍️</span>
+                <input
+                  type="color"
+                  defaultValue="#fef08a"
+                  onChange={(e) => execCmd("hiliteColor", e.target.value)}
+                  className="w-3.5 h-3.5 border-0 bg-transparent cursor-pointer p-0"
+                />
+              </label>
+            </div>
 
-        <div className="w-px h-5 bg-slate-200 mx-1" />
+            {/* Alignment & Lists */}
+            <div className="flex items-center gap-0.5 border-r border-[#e1dfdd] pr-2">
+              <button onClick={() => execCmd("justifyLeft")} className="w-7 h-7 hover:bg-[#edebe9] rounded text-xs" title="Align Left">
+                ⬅
+              </button>
+              <button onClick={() => execCmd("justifyCenter")} className="w-7 h-7 hover:bg-[#edebe9] rounded text-xs" title="Center">
+                ↔
+              </button>
+              <button onClick={() => execCmd("justifyRight")} className="w-7 h-7 hover:bg-[#edebe9] rounded text-xs" title="Align Right">
+                ➡
+              </button>
+              <button onClick={() => execCmd("justifyFull")} className="w-7 h-7 hover:bg-[#edebe9] rounded text-xs" title="Justify">
+                ☰
+              </button>
+              <button onClick={() => execCmd("insertUnorderedList")} className="px-1.5 h-7 hover:bg-[#edebe9] rounded text-xs" title="Bullet List">
+                • List
+              </button>
+              <button onClick={() => execCmd("insertOrderedList")} className="px-1.5 h-7 hover:bg-[#edebe9] rounded text-xs" title="Numbered List">
+                1. List
+              </button>
+            </div>
 
-        {/* Color pickers */}
-        <label className="h-8 px-2 rounded-lg hover:bg-slate-100 flex items-center gap-1 cursor-pointer text-xs font-semibold" title="Font Color">
-          <span>A</span>
-          <input
-            type="color"
-            className="w-4 h-4 rounded cursor-pointer border-0 bg-transparent p-0"
-            onChange={(e) => execCmd("foreColor", e.target.value)}
-            defaultValue="#0f172a"
-          />
-        </label>
-        <label className="h-8 px-2 rounded-lg hover:bg-slate-100 flex items-center gap-1 cursor-pointer text-xs font-semibold" title="Highlight Color">
-          <span>🖍️</span>
-          <input
-            type="color"
-            className="w-4 h-4 rounded cursor-pointer border-0 bg-transparent p-0"
-            onChange={(e) => execCmd("hiliteColor", e.target.value)}
-            defaultValue="#fef08a"
-          />
-        </label>
+            {/* Heading Style Quick Dropdown */}
+            <div className="flex items-center gap-1">
+              <button onClick={() => execCmd("formatBlock", "p")} className="px-2 py-1 border border-slate-200 hover:bg-slate-50 rounded text-xs">
+                Normal
+              </button>
+              <button onClick={() => execCmd("formatBlock", "h1")} className="px-2 py-1 border border-slate-200 hover:bg-slate-50 rounded text-xs font-bold text-blue-700">
+                Heading 1
+              </button>
+              <button onClick={() => execCmd("formatBlock", "h2")} className="px-2 py-1 border border-slate-200 hover:bg-slate-50 rounded text-xs font-semibold text-blue-600">
+                Heading 2
+              </button>
+              <button onClick={() => execCmd("removeFormat")} className="px-2 py-1 border border-slate-200 hover:bg-slate-50 rounded text-xs text-slate-500">
+                Clear
+              </button>
+            </div>
+          </div>
+        )}
 
-        <div className="w-px h-5 bg-slate-200 mx-1" />
+        {/* INSERT TAB */}
+        {activeTab === "insert" && (
+          <div className="flex items-center gap-2">
+            <button onClick={insertTable} className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded flex items-center gap-1.5">
+              <span>▦</span> Table
+            </button>
+            <button onClick={insertImage} className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded flex items-center gap-1.5">
+              <span>🖼️</span> Pictures
+            </button>
+            <button 
+              onClick={() => { const url = prompt("Enter hyperlink URL:"); if (url) execCmd("createLink", url); }} 
+              className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded flex items-center gap-1.5"
+            >
+              <span>🔗</span> Link
+            </button>
+            <button onClick={() => execCmd("insertHorizontalRule")} className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded flex items-center gap-1.5">
+              <span>—</span> Divider Line
+            </button>
+            <button 
+              onClick={() => execCmd("insertHTML", '<div style="page-break-after: always; border-bottom: 2px dashed #cbd5e1; margin: 24px 0; color: #94a3b8; font-size: 10px; text-align: center;">--- Page Break ---</div>')} 
+              className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded flex items-center gap-1.5"
+            >
+              <span>📄</span> Page Break
+            </button>
+          </div>
+        )}
 
-        {/* Text align */}
-        <button onClick={() => execCmd("justifyLeft")} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-xs" title="Align Left">
-          ⬅
-        </button>
-        <button onClick={() => execCmd("justifyCenter")} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-xs" title="Align Center">
-          ↔
-        </button>
-        <button onClick={() => execCmd("justifyRight")} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-xs" title="Align Right">
-          ➡
-        </button>
+        {/* LAYOUT TAB */}
+        {activeTab === "layout" && (
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1">
+              <span className="font-semibold text-slate-500">Margins:</span>
+              {(["normal", "narrow", "wide"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setPageMargin(m)}
+                  className={`px-2.5 py-1 rounded capitalize ${
+                    pageMargin === m ? "bg-[#185abd] text-white" : "border border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
 
-        <div className="w-px h-5 bg-slate-200 mx-1" />
+            <div className="w-px h-5 bg-slate-200" />
 
-        {/* Lists */}
-        <button onClick={() => execCmd("insertUnorderedList")} className="px-2.5 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-xs font-medium" title="Bullet List">
-          • List
-        </button>
-        <button onClick={() => execCmd("insertOrderedList")} className="px-2.5 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-xs font-medium" title="Numbered List">
-          1. List
-        </button>
+            <div className="flex items-center gap-1">
+              <span className="font-semibold text-slate-500">Orientation:</span>
+              <button
+                onClick={() => setPageOrientation("portrait")}
+                className={`px-2.5 py-1 rounded ${
+                  pageOrientation === "portrait" ? "bg-[#185abd] text-white" : "border border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                Portrait
+              </button>
+              <button
+                onClick={() => setPageOrientation("landscape")}
+                className={`px-2.5 py-1 rounded ${
+                  pageOrientation === "landscape" ? "bg-[#185abd] text-white" : "border border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                Landscape
+              </button>
+            </div>
+          </div>
+        )}
 
-        <div className="w-px h-5 bg-slate-200 mx-1" />
+        {/* VIEW TAB */}
+        {activeTab === "view" && (
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1">
+              <button onClick={() => setZoom(Math.max(50, zoom - 10))} className="p-1.5 hover:bg-slate-100 rounded">
+                <ZoomOut className="w-4 h-4" />
+              </button>
+              <span className="w-12 text-center font-bold">{zoom}%</span>
+              <button onClick={() => setZoom(Math.min(200, zoom + 10))} className="p-1.5 hover:bg-slate-100 rounded">
+                <ZoomIn className="w-4 h-4" />
+              </button>
+              <button onClick={() => setZoom(100)} className="px-2 py-1 text-xs border border-slate-200 hover:bg-slate-50 rounded ml-1">
+                100%
+              </button>
+            </div>
 
-        {/* Inserts */}
-        <button 
-          onClick={() => { const url = prompt("Enter hyperlink URL (e.g. https://google.com):"); if (url) execCmd("createLink", url); }} 
-          className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-xs" 
-          title="Insert Link"
-        >
-          🔗
-        </button>
-        <button onClick={insertImage} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-xs" title="Insert Image">
-          🖼️
-        </button>
-        <button onClick={() => execCmd("insertHorizontalRule")} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-xs font-bold" title="Insert Horizontal Rule">
-          —
-        </button>
+            <div className="w-px h-5 bg-slate-200" />
 
-        <div className="w-px h-5 bg-slate-200 mx-1" />
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showRuler}
+                onChange={(e) => setShowRuler(e.target.checked)}
+                className="rounded text-blue-600"
+              />
+              <span>Ruler</span>
+            </label>
 
-        {/* Undo / Redo */}
-        <button onClick={() => execCmd("undo")} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-xs" title="Undo (Ctrl+Z)">
-          ↩
-        </button>
-        <button onClick={() => execCmd("redo")} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-xs" title="Redo (Ctrl+Y)">
-          ↪
-        </button>
-        <button onClick={() => execCmd("removeFormat")} className="px-2 h-8 rounded-lg hover:bg-slate-100 text-xs font-medium text-slate-500" title="Clear Formatting">
-          Clear Format
-        </button>
+            <button
+              onClick={() => {
+                if (!document.fullscreenElement) {
+                  document.documentElement.requestFullscreen();
+                } else {
+                  document.exitFullscreen();
+                }
+              }}
+              className="px-2.5 py-1 border border-slate-200 hover:bg-slate-50 rounded flex items-center gap-1 text-xs"
+            >
+              <Maximize2 className="w-3.5 h-3.5" /> Full Screen
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Document Sheet Canvas */}
-      <div className="bg-slate-100/80 p-4 sm:p-8 rounded-3xl border border-slate-200 shadow-inner flex justify-center min-h-[750px]">
+      {/* 4. Top Ruler (Optional) */}
+      {showRuler && (
+        <div className="bg-[#edebe9] border-b border-[#d2d0ce] h-4 flex items-center justify-center overflow-hidden text-[9px] text-[#605e5c] select-none">
+          <div className="w-[816px] flex justify-between px-8 border-x border-[#c8c6c4]">
+            <span>1</span>
+            <span>2</span>
+            <span>3</span>
+            <span>4</span>
+            <span>5</span>
+            <span>6</span>
+            <span>7</span>
+            <span>8</span>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Document Stage (Realistic Page Canvas) */}
+      <div className="flex-1 overflow-auto p-4 sm:p-10 flex justify-center items-start bg-[#e5e5e5]">
         <div
+          style={{
+            transform: `scale(${zoom / 100})`,
+            transformOrigin: "top center",
+            transition: "transform 0.15s ease",
+            width: pageOrientation === "portrait" ? "816px" : "1056px",
+            minHeight: pageOrientation === "portrait" ? "1056px" : "816px",
+            padding: pageMargin === "narrow" ? "48px" : pageMargin === "wide" ? "144px" : "96px",
+            fontFamily: fontFamily,
+          }}
+          className="bg-white shadow-2xl rounded-xs border border-[#d1d5db] outline-none text-[#1e293b] leading-relaxed cursor-text selection:bg-[#c7d2fe]"
           ref={editorRef}
           contentEditable
           suppressContentEditableWarning
           onInput={updateCounts}
-          onClick={() => setShowExportMenu(false)}
-          className="w-full max-w-[850px] min-h-[700px] bg-white rounded-2xl shadow-lg border border-slate-200/80 p-8 sm:p-14 outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-800 text-base leading-relaxed"
-          style={{
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
-          }}
         >
-          <h1>Welcome to Edftar Online Word &amp; Document Editor</h1>
-          <p>
-            You can now create, open, and edit Word documents completely free and <strong>100% in your browser</strong>.
+          <h1 style={{ fontSize: "22pt", fontWeight: "bold", marginBottom: "12pt", color: "#185abd" }}>
+            Welcome to MS Word Online
+          </h1>
+          <p style={{ marginBottom: "8pt", lineHeight: "1.6" }}>
+            This is a full-featured online Microsoft Word document editor running directly inside your browser.
           </p>
-          <h2>Key Features</h2>
-          <ul>
-            <li><strong>Open Word Files:</strong> Click &quot;Open .docx&quot; above to load any existing Word document.</li>
-            <li><strong>Rich Text Formatting:</strong> Headings, fonts, bold, italic, underline, custom text colors, and highlights.</li>
-            <li><strong>Insert Media:</strong> Add images, hyperlinks, bulleted/numbered lists, and divider rules.</li>
-            <li><strong>Auto-Save:</strong> Content is securely preserved locally in your browser so you never lose progress.</li>
-            <li><strong>Export Everywhere:</strong> Export as clean Word (.docx), print-ready PDF (.pdf), HTML, or text.</li>
+          <h2 style={{ fontSize: "16pt", fontWeight: "bold", marginTop: "14pt", marginBottom: "8pt", color: "#1e3a8a" }}>
+            Features Included:
+          </h2>
+          <ul style={{ paddingLeft: "24px", marginBottom: "8pt" }}>
+            <li style={{ marginBottom: "4pt" }}><strong>Full Office Ribbon:</strong> Home, Insert, Layout, and View tabs.</li>
+            <li style={{ marginBottom: "4pt" }}><strong>Import Existing .docx:</strong> Open and edit your local Word documents.</li>
+            <li style={{ marginBottom: "4pt" }}><strong>Tables &amp; Images:</strong> Insert tables, pictures, links, and page breaks.</li>
+            <li style={{ marginBottom: "4pt" }}><strong>Custom Margins &amp; Orientation:</strong> Portrait and Landscape layout support.</li>
+            <li style={{ marginBottom: "4pt" }}><strong>Instant Export:</strong> Download as real Word <code>.docx</code> or print to PDF.</li>
           </ul>
-          <p>
-            Start typing above or replace this text with your own content!
+          <p style={{ marginTop: "12pt", lineHeight: "1.6" }}>
+            Select any text to begin formatting, or click <strong>File &gt; New</strong> to start with a blank page!
           </p>
         </div>
       </div>
+
+      {/* 6. Office Bottom Status Bar */}
+      <footer className="bg-[#185abd] text-white px-4 py-1 text-xs flex items-center justify-between select-none">
+        <div className="flex items-center gap-4">
+          <span>Page 1 of 1</span>
+          <span>{wordCount} words</span>
+          <span>{charCount} characters</span>
+          <span className="hidden sm:inline">English (US)</span>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button onClick={() => setZoom(Math.max(50, zoom - 10))} className="hover:text-white/80 font-bold px-1">
+            -
+          </button>
+          <input
+            type="range"
+            min="50"
+            max="180"
+            step="5"
+            value={zoom}
+            onChange={(e) => setZoom(Number(e.target.value))}
+            className="w-20 accent-white h-1.5 cursor-pointer"
+          />
+          <button onClick={() => setZoom(Math.min(180, zoom + 10))} className="hover:text-white/80 font-bold px-1">
+            +
+          </button>
+          <span className="w-10 text-right">{zoom}%</span>
+        </div>
+      </footer>
     </div>
   );
 }
