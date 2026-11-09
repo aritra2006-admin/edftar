@@ -77,7 +77,7 @@ export default function Home() {
       <section className="max-w-4xl mx-auto px-4 text-center space-y-6">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold shadow-xs">
           <Sparkles className="w-3.5 h-3.5 text-rose-600" />
-          <span>The 100% Private, Client-Side Alternative to iLovePDF</span>
+          <span>The 100% Free, Private & Client-Side PDF Toolkit</span>
         </div>
 
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-[1.1]">
