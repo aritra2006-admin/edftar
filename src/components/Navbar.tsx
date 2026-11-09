@@ -30,6 +30,7 @@ export default function Navbar() {
     { name: "Word to PDF", href: "/word-to-pdf", icon: FileWord },
     { name: "PDF to Word", href: "/pdf-to-word", icon: FileWord },
     { name: "Edit Word", href: "/edit-word", icon: FileWord },
+    { name: "Edit PDF", href: "/edit-pdf", icon: FileText },
     { name: "Compress", href: "/compress-pdf", icon: Archive },
   ];
 

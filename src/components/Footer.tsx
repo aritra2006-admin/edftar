@@ -48,6 +48,9 @@ export default function Footer() {
               <li>
                 <Link href="/edit-word" className="hover:text-brand-400 transition-colors">Edit Word Online</Link>
               </li>
+              <li>
+                <Link href="/edit-pdf" className="hover:text-brand-400 transition-colors">Edit PDF (Adobe Editor)</Link>
+              </li>
             </ul>
           </div>
 

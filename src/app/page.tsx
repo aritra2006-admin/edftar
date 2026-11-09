@@ -116,6 +116,15 @@ export default function Home() {
       badge: "Editor",
       category: "Edit",
     },
+    {
+      title: "Edit PDF (Adobe Style)",
+      description: "Directly annotate, add text, freehand draw, highlight, whiteout, and sign PDF files in your browser.",
+      href: "/edit-pdf",
+      icon: FileText,
+      color: "from-red-600 to-rose-700",
+      badge: "Adobe Pro",
+      category: "Edit",
+    },
   ];
 
   return (
