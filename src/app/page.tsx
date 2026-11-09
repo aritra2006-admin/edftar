@@ -107,6 +107,15 @@ export default function Home() {
       badge: "New",
       category: "Optimize",
     },
+    {
+      title: "Edit Word Online",
+      description: "Create, open, and edit Word (.docx) documents in your browser. Rich formatting & instant export.",
+      href: "/edit-word",
+      icon: FileWord,
+      color: "from-blue-600 to-cyan-600",
+      badge: "Editor",
+      category: "Edit",
+    },
   ];
 
   return (

@@ -45,6 +45,9 @@ export default function Footer() {
               <li>
                 <Link href="/organize-pdf" className="hover:text-brand-400 transition-colors">Organize & Delete</Link>
               </li>
+              <li>
+                <Link href="/edit-word" className="hover:text-brand-400 transition-colors">Edit Word Online</Link>
+              </li>
             </ul>
           </div>
 
