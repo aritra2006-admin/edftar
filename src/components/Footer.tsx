@@ -59,7 +59,10 @@ export default function Footer() {
                 <Link href="/pdf-to-jpg" className="hover:text-brand-400 transition-colors">PDF to JPG</Link>
               </li>
               <li>
-                <span className="text-slate-500 text-xs italic">Word to PDF (Coming soon)</span>
+                <Link href="/word-to-pdf" className="hover:text-brand-400 transition-colors">Word to PDF</Link>
+              </li>
+              <li>
+                <Link href="/pdf-to-word" className="hover:text-brand-400 transition-colors">PDF to Word</Link>
               </li>
               <li>
                 <span className="text-slate-500 text-xs italic">Compress PDF (Coming soon)</span>
