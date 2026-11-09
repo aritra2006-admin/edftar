@@ -6,6 +6,7 @@ import {
   Grid, 
   Image as ImageIcon, 
   FileImage, 
+  FileWord,
   ShieldCheck, 
   Zap, 
   Lock, 
@@ -69,6 +70,24 @@ export default function Home() {
       badge: "Export",
       category: "Convert",
     },
+    {
+      title: "Word to PDF",
+      description: "Convert .docx Word documents to print-ready PDF files directly in your browser.",
+      href: "/word-to-pdf",
+      icon: FileWord,
+      color: "from-blue-600 to-indigo-700",
+      badge: "New",
+      category: "Convert",
+    },
+    {
+      title: "PDF to Word",
+      description: "Extract text from PDF and download as an editable .docx Word document.",
+      href: "/pdf-to-word",
+      icon: FileWord,
+      color: "from-indigo-500 to-purple-600",
+      badge: "New",
+      category: "Convert",
+    },
   ];
 
   return (
@@ -77,7 +96,7 @@ export default function Home() {
       <section className="max-w-4xl mx-auto px-4 text-center space-y-6">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold shadow-xs">
           <Sparkles className="w-3.5 h-3.5 text-rose-600" />
-          <span>The 100% Free, Private & Client-Side PDF Toolkit</span>
+          <span>The 100% Free, Private &amp; Client-Side PDF Toolkit</span>
         </div>
 
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-[1.1]">
@@ -117,7 +136,7 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {tools.map((tool) => {
             const Icon = tool.icon;
             return (
@@ -133,7 +152,11 @@ export default function Home() {
                     >
                       <Icon className="w-7 h-7 stroke-[2]" />
                     </div>
-                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 group-hover:bg-brand-50 group-hover:text-brand-600 transition-colors">
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full transition-colors ${
+                      tool.badge === "New"
+                        ? "bg-emerald-100 text-emerald-700 group-hover:bg-emerald-200"
+                        : "bg-slate-100 text-slate-600 group-hover:bg-brand-50 group-hover:text-brand-600"
+                    }`}>
                       {tool.badge}
                     </span>
                   </div>
@@ -167,7 +190,7 @@ export default function Home() {
               Your documents never leave your browser
             </h2>
             <p className="text-sm text-slate-400 leading-relaxed">
-              Unlike cloud services that require you to upload your personal PDF files to their servers, Edftar executes all PDF modifications locally in your computer’s memory using JavaScript and WebAssembly.
+              Unlike cloud services that require you to upload your personal PDF files to their servers, Edftar executes all PDF modifications locally in your computer&apos;s memory using JavaScript and WebAssembly.
             </p>
           </div>
 

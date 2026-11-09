@@ -10,6 +10,7 @@ import {
   Grid, 
   Image as ImageIcon, 
   FileImage, 
+  FileWord,
   ShieldCheck, 
   Menu, 
   X 
@@ -25,6 +26,8 @@ export default function Navbar() {
     { name: "Organize PDF", href: "/organize-pdf", icon: Grid },
     { name: "JPG to PDF", href: "/jpg-to-pdf", icon: ImageIcon },
     { name: "PDF to JPG", href: "/pdf-to-jpg", icon: FileImage },
+    { name: "Word to PDF", href: "/word-to-pdf", icon: FileWord },
+    { name: "PDF to Word", href: "/pdf-to-word", icon: FileWord },
   ];
 
   return (
@@ -48,15 +51,15 @@ export default function Navbar() {
             </div>
           </Link>
 
-          {/* Desktop Nav */}
-          <nav className="hidden md:flex items-center gap-1">
+          {/* Desktop Nav - scrollable */}
+          <nav className="hidden md:flex items-center gap-1 overflow-x-auto">
             {tools.map((item) => {
               const Icon = item.icon;
               return (
                 <Link
                   key={item.name}
                   href={item.href}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-brand-600 hover:bg-brand-50/70 transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-brand-600 hover:bg-brand-50/70 transition-colors whitespace-nowrap"
                 >
                   <Icon className="w-4 h-4 text-slate-400 group-hover:text-brand-600" />
                   {item.name}
