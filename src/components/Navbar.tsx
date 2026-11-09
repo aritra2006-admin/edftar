@@ -11,6 +11,7 @@ import {
   Image as ImageIcon, 
   FileImage, 
   FileWord,
+  Archive,
   ShieldCheck, 
   Menu, 
   X 
@@ -28,6 +29,7 @@ export default function Navbar() {
     { name: "PDF to JPG", href: "/pdf-to-jpg", icon: FileImage },
     { name: "Word to PDF", href: "/word-to-pdf", icon: FileWord },
     { name: "PDF to Word", href: "/pdf-to-word", icon: FileWord },
+    { name: "Compress", href: "/compress-pdf", icon: Archive },
   ];
 
   return (

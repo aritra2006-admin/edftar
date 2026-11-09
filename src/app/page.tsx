@@ -7,6 +7,7 @@ import {
   Image as ImageIcon, 
   FileImage, 
   FileWord,
+  Archive,
   ShieldCheck, 
   Zap, 
   Lock, 
@@ -87,6 +88,24 @@ export default function Home() {
       color: "from-indigo-500 to-purple-600",
       badge: "New",
       category: "Convert",
+    },
+    {
+      title: "Compress PDF",
+      description: "Reduce PDF file size with adjustable quality — fast, free, and fully private.",
+      href: "/compress-pdf",
+      icon: Archive,
+      color: "from-orange-500 to-red-600",
+      badge: "New",
+      category: "Optimize",
+    },
+    {
+      title: "Compress Images",
+      description: "Batch compress JPG, PNG, WebP images with adjustable quality and max dimensions.",
+      href: "/compress-image",
+      icon: ImageIcon,
+      color: "from-pink-500 to-rose-600",
+      badge: "New",
+      category: "Optimize",
     },
   ];
 
